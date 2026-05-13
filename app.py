@@ -99,7 +99,7 @@ def make_feedback_rates_plot(model_data):
 
     ax.set_xlabel("Step")
     ax.set_ylabel("Cumulative share of exposures")
-    ax.set_title("User Response Rates Over Time")
+    ax.set_title("Cumulative User Response Rates Over Time")
     ax.legend()
     ax.grid(True, alpha=0.3)
     fig.tight_layout()
@@ -616,7 +616,7 @@ Higher variance means users are spread farther apart ideologically.
                 fig3 = make_line_plot(
                     model_data,
                     "Backfire Rate",
-                    "Backfire Rate Over Time",
+                    "Cumulative Backfire Rate Over Time",
                     "Cumulative backfire rate",
                 )
                 solara.FigureMatplotlib(fig3)
@@ -675,10 +675,12 @@ Lower values mean more personalized and narrower content exposure.
         solara.FigureMatplotlib(fig7)
         solara.Markdown(
             """
-**How to read this plot:**  
-This shows whether users with different final opinions also have different acceptance thresholds.  
-If many points cluster near the upper or lower threshold limits, the adaptive tolerance rule may be too strong and should be adjusted.
-"""
+        **How to read this plot:**  
+        This shows whether users with different final opinions also have different acceptance thresholds.  
+        If many points cluster near the upper or lower threshold limits, the adaptive tolerance rule may be too strong and should be adjusted.
+
+        **Note:** If adaptive tolerance is OFF, all agents retain their initial thresholds (0.18 for low-tolerance, 0.35 for high-tolerance) and the scatter will show only two horizontal lines—this is expected.
+        """
         )
         solara.Markdown("## Raw Model Data")
 
