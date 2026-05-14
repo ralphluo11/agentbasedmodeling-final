@@ -15,7 +15,6 @@ Under what conditions can algorithmic content diversity produce political polari
 - `batch_analysis_1.py` — analyzes `batch_results.csv` and generates summary figures.
 - `backfire_causal.py` — runs the backfire-rate ablation experiment.
 - `trajectory_analysis_v2.py` — runs the long-horizon trajectory experiment.
-- `ABM Final Draft.pdf` — final project paper.
 
 ## Installation
 
