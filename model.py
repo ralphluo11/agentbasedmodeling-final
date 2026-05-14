@@ -1,22 +1,8 @@
 # model.py
 
 """
-Recommendation-backfire ABM.
-
-This model asks when algorithmically introduced cross-cutting exposure reduces
-polarization, and when user rejection teaches the recommender system to narrow
-future recommendations.
-
-Core mechanism:
-
-    content recommendation
-        -> psychological response
-        -> user feedback
-        -> algorithmic update
-        -> future recommendation
-        -> aggregate polarization or moderation
-
-This version is written for Mesa 3.x.
+This model simulates a population of agents with ideological opinions who receive content recommendations from an algorithm. The algorithm learns from user feedback, and users update their opinions based on the
+content they see and their psychological tolerance for disagreement. The model captures the feedback loop between user behavior and algorithmic recommendations, which can lead to polarization or moderation depending on the parameters.
 """
 
 from mesa import Model
@@ -26,10 +12,6 @@ import numpy as np
 from agents import UserAgent
 
 
-# -----------------------------
-# Helper
-# -----------------------------
-
 def get_agents(model):
     """
     Mesa 3.x stores agents in model.agents.
@@ -38,9 +20,8 @@ def get_agents(model):
     return list(model.agents)
 
 
-# -----------------------------
-# Model-level reporters
-# -----------------------------
+
+# Model-level reporters to compute aggregate metrics at each step.
 
 def mean_opinion(model):
     opinions = [agent.opinion for agent in get_agents(model)]
@@ -136,9 +117,6 @@ def model_backfire_rate(model):
     """
     Share of all exposures that produced rejection/backfire.
 
-    Important: this function is named model_backfire_rate to avoid conflict
-    with the parameter self.backfire_rate, which is the strength of opinion
-    movement after rejection.
     """
     total_rejects = sum(agent.reject_count for agent in get_agents(model))
     total_exposures = sum(agent.total_exposures for agent in get_agents(model))
@@ -199,7 +177,6 @@ class RecommendationBackfireModel(Model):
         self.assimilation_rate = assimilation_rate
 
         # This is the strength of opinion movement after rejection.
-        # It is not the same as the measured "Backfire Rate."
         self.backfire_rate = backfire_rate
 
         # Psychological threshold parameters.
@@ -221,8 +198,7 @@ class RecommendationBackfireModel(Model):
         self.tolerance_learning_rate = 0.005
         self.defensive_rate = 0.008
 
-        # Usually leave this False for theoretical clarity:
-        # noncommitment means no psychological update.
+        # Whether to ignore changes in tolerance when updating based on feedback.
         self.ignore_changes_tolerance = False
         self.ignore_tolerance_change = 0.0
 
@@ -277,8 +253,6 @@ class RecommendationBackfireModel(Model):
     def create_agents(self):
         """
         Create agents with initial ideological opinions.
-
-        In Mesa 3.x, agents automatically register with the model when created.
         """
 
         for _ in range(self.num_agents):
@@ -307,8 +281,7 @@ class RecommendationBackfireModel(Model):
             opinion = np.random.normal(loc=0.0, scale=0.25)
 
         else:
-            # Default: mildly polarized population.
-            # Half starts left-of-center, half starts right-of-center.
+            # default is slightly polarized distribution with two clusters around -0.45 and +0.45
             if self.random.random() < 0.5:
                 opinion = np.random.normal(loc=-0.45, scale=0.18)
             else:
@@ -322,15 +295,6 @@ class RecommendationBackfireModel(Model):
 
         The recommender samples content from a normal distribution centered on
         the platform's current learned preference_center for that user.
-
-        preference_width controls recommendation diversity:
-            larger width = broader, more cross-cutting exposure
-            smaller width = narrower, more homogeneous exposure
-
-        This abstracts from real proprietary algorithms but captures the core
-        feedback mechanism:
-            user rejection narrows future exposure;
-            positive feedback shifts future exposure toward accepted content.
         """
 
         content = np.random.normal(
@@ -342,8 +306,7 @@ class RecommendationBackfireModel(Model):
 
     def step(self):
         """
-        Mesa 3.x replacement for RandomActivation:
-        shuffle agents, then call each agent's step method.
+        Run one step of the model: each agent receives a recommendation and updates.
         """
         self.agents.shuffle_do("step")
         self.datacollector.collect(self)

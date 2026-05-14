@@ -1,22 +1,8 @@
 # batch_analysis.py (v2)
 
 """
-Analysis and visualization for batch_results.csv (v2).
-
-Reads the 3D sweep (width x adaptive x distribution) and produces:
-
-    fig1_main_extremity_by_dist.png   - 3-panel: extremity vs width, one panel per distribution
-    fig2_extreme_share_by_dist.png    - 3-panel: extreme share vs width
-    fig3_delta_extremity.png          - 3-panel: change in extremity (final - initial)
-    fig4_backfire_rate_by_dist.png    - 3-panel: backfire rate vs width
-    fig5_threshold_drift_by_dist.png  - 3-panel: adaptive tolerance evidence
-    fig6_summary_grid.png             - 4-panel: main outcomes for the polarized condition
-    fig7_essay_main.png               - the single most important figure for the paper
-
-Also prints a numeric summary table and a non-monotonicity check.
-
-Run with:
-    python batch_analysis_1.py
+Analysis and visualization for batch_results.csv 
+Reads the 3D sweep (width x adaptive x distribution) and produces set of figures and numerical summaries for the essay.
 """
 
 import numpy as np
@@ -97,10 +83,6 @@ def faceted_by_distribution(df, value_col, title, y_label, filename, ylim=None):
 def faceted_delta(df, final_col, initial_col, title, y_label, filename):
     """
     3-panel plot of CHANGE: final_col - initial_col.
-
-    Critical for distinguishing "frozen" outcomes (low extremity because
-    nothing happened) from "true depolarization" outcomes (low extremity
-    because system actively moderated).
     """
 
     df = df.copy()
@@ -209,14 +191,8 @@ def summary_grid_polarized(df, filename):
 
 def essay_main_figure(df, filename):
     """
-    The single most informative figure for the essay.
-
-    Layout:
         Top row: final extremity by width, faceted by distribution.
         Bottom row: change in extremity (final - initial), faceted by distribution.
-
-    The bottom row is the cleanest evidence on whether the algorithm DRIVES
-    polarization (positive delta) or not (zero or negative delta).
     """
 
     df = df.copy()
@@ -319,13 +295,7 @@ def print_summary_table(df):
 
 def print_emergent_polarization_check(df):
     """
-    Critical check for the essay claim:
-
-    Under the UNIFORM initial distribution (no prior polarization), does
-    the system MOVE TOWARD polarization as recommendation width increases?
-
-    A positive delta_extremity here means the algorithm is actively creating
-    polarization, not just amplifying existing polarization.
+    check for emergent polarization under the UNIFORM initial distribution.
     """
 
     print("\nEmergent polarization check (uniform initial condition):")
@@ -353,8 +323,7 @@ def print_emergent_polarization_check(df):
 def print_moderate_breakdown_check(df):
     """
     Under the MODERATE initial distribution, does wide recommendation
-    BREAK moderation? A positive delta means the algorithm pushed a
-    moderate population toward extremes.
+    BREAK moderation? 
     """
 
     print("\nModerate-breakdown check (moderate initial condition):")
@@ -381,13 +350,7 @@ def print_moderate_breakdown_check(df):
 
 def print_adaptive_buffer_check(df):
     """
-    Compare adaptive ON vs OFF: at the widest recommendation setting,
-    does adaptive tolerance dampen the polarization that wide exposure
-    creates? Reports the gap (off - on) for each distribution.
-
-    Positive gap = adaptive tolerance acts as a buffer against algorithmic
-    polarization. This is the mirror image of "candidate 3" (adaptive
-    amplifies) and is the actual finding pattern from v1 results.
+    Compare adaptive ON vs OFF: does the adaptive algorithm provide a "buffer" against polarization?
     """
 
     print("\nAdaptive-buffer check (adaptive OFF minus adaptive ON):")

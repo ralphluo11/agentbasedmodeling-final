@@ -1,18 +1,10 @@
 # app.py
 
 """
-Solara app for the recommendation-backfire ABM.
-
-Run with:
-
-    solara run app.py
-
-This app allows you to change model parameters, run the simulation,
-and visualize model outcomes.
+This app allows you to change model parameters, run the simulation, and visualize model outcomes.
 
 Core mechanism:
-
-    content recommendation
+content recommendation
         -> psychological response
         -> user feedback
         -> algorithmic update
@@ -27,14 +19,12 @@ import matplotlib.pyplot as plt
 from model import RecommendationBackfireModel
 
 
-# -----------------------------
 # Helper functions
-# -----------------------------
 
+# Line 34-45 改成：
 def run_simulation(
     num_agents,
     steps,
-    feedback_sensitivity,
     initial_preference_width,
     high_tolerance_share,
     adaptive_tolerance,
@@ -44,14 +34,14 @@ def run_simulation(
     seed,
 ):
     """
-    Create and run one model instance.
+    Create and run one model instance with the given parameters, then return the model and collected data.
     """
 
     model = RecommendationBackfireModel(
         num_agents=num_agents,
         initial_distribution=initial_distribution,
         high_tolerance_share=high_tolerance_share,
-        feedback_sensitivity=feedback_sensitivity,
+        feedback_sensitivity=0.25,           # ← hardcoded here
         initial_preference_width=initial_preference_width,
         adaptive_tolerance=adaptive_tolerance,
         assimilation_rate=assimilation_rate,
@@ -69,7 +59,7 @@ def run_simulation(
 
 def make_line_plot(model_data, y_column, title, y_label):
     """
-    Create a simple Matplotlib line plot for one model-level variable.
+Create a simple line plot for a given model variable over time.
     """
 
     fig, ax = plt.subplots(figsize=(6, 4))
@@ -85,10 +75,7 @@ def make_line_plot(model_data, y_column, title, y_label):
 
 def make_feedback_rates_plot(model_data):
     """
-    Plot acceptance, ignore, and backfire rates together.
-
-    This directly shows the behavioral feedback process:
-    users accept some content, ignore some content, and reject some content.
+    Plot acceptance, ignore, and backfire rates together to show the user feedback process.
     """
 
     fig, ax = plt.subplots(figsize=(7, 4))
@@ -109,10 +96,7 @@ def make_feedback_rates_plot(model_data):
 
 def make_opinion_vs_algorithm_plot(model_data):
     """
-    Plot user opinion extremity and algorithmic preference-center extremity.
-
-    This helps show whether the recommender's learned profile becomes more
-    extreme together with the users.
+    Plot user opinion extremity and algorithmic preference-center extremity to show the feedback loop between user psychology and algorithmic updating.
     """
 
     fig, ax = plt.subplots(figsize=(7, 4))
@@ -140,7 +124,7 @@ def make_opinion_vs_algorithm_plot(model_data):
 
 def make_final_opinion_histogram(model):
     """
-    Create a histogram of final agent opinions.
+    Create a histogram of final agent opinions to show the overall ideological distribution at the end of the simulation.
     """
 
     opinions = [agent.opinion for agent in model.agents]
@@ -176,8 +160,7 @@ def make_preference_width_histogram(model):
 
 def make_threshold_scatter(model):
     """
-    Scatter plot showing final opinion and final acceptance threshold.
-    This helps visualize adaptive tolerance.
+    Scatter plot showing final opinion and final acceptance threshold for each agent. This can reveal whether users with different opinions also have different tolerance levels, which may indicate that the adaptive tolerance mechanism is producing heterogeneous outcomes.
     """
 
     opinions = [agent.opinion for agent in model.agents]
@@ -197,7 +180,6 @@ def make_threshold_scatter(model):
 def make_summary_items(model_data):
     """
     Return final summary metrics as a list of display tuples.
-    This avoids Solara DataFrame pagination.
     """
 
     final = model_data.iloc[-1]
@@ -274,13 +256,11 @@ def SummaryGrid(model_data):
                 compact_metric_row(name, value, description)
 
 
-# -----------------------------
-# Reactive state
-# -----------------------------
+
+# Reactive state to hold model parameters and results
 
 num_agents_state = solara.reactive(200)
 steps_state = solara.reactive(150)
-feedback_sensitivity_state = solara.reactive(0.25)
 initial_preference_width_state = solara.reactive(0.45)
 high_tolerance_share_state = solara.reactive(0.50)
 adaptive_tolerance_state = solara.reactive(True)
@@ -295,9 +275,8 @@ agent_data_state = solara.reactive(None)
 has_run_state = solara.reactive(False)
 
 
-# -----------------------------
-# Solara Page
-# -----------------------------
+# Solara Page component and section layout
+
 
 @solara.component
 def Page():
@@ -307,10 +286,6 @@ def Page():
         solara.Markdown(
             """
 # Recommendation Backfire ABM
-
-**Research question:**  
-When do recommendation systems reduce polarization by exposing users to cross-cutting content, and when do user feedback loops cause such exposure to backfire by narrowing future recommendations and reinforcing ideological extremity?
-
 The model represents a simplified content recommendation platform:
 
 1. The platform recommends ideological content to each user.
@@ -386,21 +361,6 @@ Starting ideological distribution of users.
             # Algorithm settings
             # -----------------------------
             solara.Markdown("### 2. Recommendation Algorithm")
-
-            solara.Markdown(
-                f"""
-**Feedback sensitivity:** `{feedback_sensitivity_state.value:.2f}`  
-How strongly the recommender updates after user feedback.  
-Higher values mean the algorithm learns faster from clicks, skips, and dislikes.
-"""
-            )
-            solara.SliderFloat(
-                "Feedback sensitivity",
-                value=feedback_sensitivity_state,
-                min=0.01,
-                max=0.80,
-                step=0.01,
-            )
 
             solara.Markdown(
                 f"""
@@ -503,12 +463,10 @@ Higher values mean rejected content produces stronger polarization pressure.
             )
 
             solara.Markdown("---")
-
             def on_run():
                 model, model_data, agent_data = run_simulation(
                     num_agents=num_agents_state.value,
                     steps=steps_state.value,
-                    feedback_sensitivity=feedback_sensitivity_state.value,
                     initial_preference_width=initial_preference_width_state.value,
                     high_tolerance_share=high_tolerance_share_state.value,
                     adaptive_tolerance=adaptive_tolerance_state.value,

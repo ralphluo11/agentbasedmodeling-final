@@ -1,24 +1,7 @@
 # trajectory_analysis_v2.py
 
 """
-Experiment C v2: Long-horizon trajectory analysis for Finding 4 (overshoot).
-
-Changes from v1:
-    - 400 steps instead of 200 (test whether the relaxation continues
-      beyond the original window).
-    - 20 seeds instead of 10 (cleaner SD bands; matches main batch).
-    - Parallelized (180 runs * 400 steps takes ~6-10 min serial; faster in parallel).
-    - Three numeric diagnostics added:
-        (a) peak step and peak value per condition,
-        (b) magnitude of relaxation from peak to step 400,
-        (c) late-stage drift (slope between step 300 and step 400)
-            -- tells us whether the system is still drifting or has stabilized.
-
-The goal is to characterize the overshoot pattern precisely enough to
-support strong claims in Finding 4 of the essay.
-
-Run with:
-    python trajectory_analysis_v2.py
+ Long-horizon trajectory analysis for Finding 4 (overshoot).
 """
 
 import time
@@ -259,8 +242,6 @@ def main():
                 remaining = (n_runs - i) / rate if rate > 0 else 0
                 print(f"  {i}/{n_runs} runs ({elapsed:.1f}s, ~{remaining:.1f}s remaining)")
 
-    # Serial fallback (uncomment if multiprocessing fails on Windows):
-    # rows = [run_one(a) for a in args_list]
 
     df = pd.concat(rows, ignore_index=True)
     df.to_csv("trajectory_results_v2.csv", index=False)

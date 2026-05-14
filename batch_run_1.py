@@ -2,24 +2,8 @@
 
 """
 Batch experiment for the recommendation-backfire ABM.
-
-This version sweeps three parameters:
-    - initial_preference_width  (algorithmic recommendation diversity)
-    - adaptive_tolerance        (whether psychological thresholds update)
-    - initial_distribution      (polarized / uniform / moderate)
-
-Adding initial_distribution lets us distinguish three regimes:
-    - polarized:  does the system stay frozen, depolarize, or further polarize?
-    - uniform:    does cross-cutting exposure cause emergent polarization?
-    - moderate:   does the system stay moderate, or does the algorithm push it apart?
-
-Each (width x adaptive x distribution) cell is run with multiple random seeds.
-Results are saved to batch_results.csv (one row per run).
-
-Run with:
-    python batch_run.py
-
-After it finishes, run batch_analysis.py to produce figures.
+This script runs a large number of model instances across a sweep of key parameters,
+collects final-step metrics, and saves the results to a CSV file for later analysis.
 """
 
 import time
@@ -168,14 +152,6 @@ def main():
                     f"  Completed {i}/{n_runs} runs "
                     f"({elapsed:.1f}s elapsed, ~{remaining:.1f}s remaining)"
                 )
-
-    # --- Serial fallback (uncomment if multiprocessing fails on Windows) ---
-    # results = []
-    # for i, args in enumerate(args_list, start=1):
-    #     results.append(run_one(args))
-    #     if i % 50 == 0:
-    #         print(f"  Completed {i}/{n_runs} runs")
-
     df = pd.DataFrame(results)
 
     df = df.sort_values(

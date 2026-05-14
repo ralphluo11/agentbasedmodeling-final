@@ -2,41 +2,6 @@
 
 """
 Experiment A: Causal test of the backfire mechanism.
-
-Finding 1 in the main batch (uniform initial distribution, wide recommendations
--> emergent polarization) is consistent with two different mechanisms:
-
-    (a) Rejection drives polarization: users see disagreeable content, push
-        away from it, and the algorithm narrows further. This is the story
-        the paper wants to tell.
-
-    (b) Assimilation alone drives polarization: users meet content drawn
-        from a wide distribution and assimilate toward it; the spread of
-        accepted content alone produces extremity.
-
-To distinguish these, we sweep the backfire_rate parameter from 0 to 0.12.
-backfire_rate = 0 means rejection is psychologically inert: when content
-falls in the rejection zone, the user neither moves toward nor away from it.
-
-Prediction:
-    If (a) is right, lowering backfire_rate sharply reduces polarization,
-    especially at wide recommendation widths.
-    If (b) is right, polarization should be nearly identical across all
-    backfire_rate values.
-
-This is the cleanest available falsification test of the paper's main claim.
-
-Sweep:
-    backfire_rate          in {0.00, 0.03, 0.06, 0.12}
-    initial_preference_width in {0.20, 0.40, 0.60, 0.85, 1.00}
-    adaptive_tolerance      in {True, False}
-    seed                    in 1..20
-    initial_distribution   = uniform   (held fixed; this is the cleanest test)
-
-Total: 4 * 5 * 2 * 20 = 800 runs.
-
-Run with:
-    python backfire_causal.py
 """
 
 import time
@@ -141,8 +106,7 @@ def main():
                 remaining = (n_runs - i) / rate if rate > 0 else 0
                 print(f"  {i}/{n_runs} runs ({elapsed:.1f}s, ~{remaining:.1f}s remaining)")
 
-    # Serial fallback (uncomment if multiprocessing fails on Windows):
-    # results = [run_one(a) for a in args_list]
+
 
     df = pd.DataFrame(results).sort_values(
         ["adaptive_tolerance", "backfire_rate", "initial_preference_width", "seed"]
@@ -152,7 +116,7 @@ def main():
     print(f"\nSaved {OUTPUT_PATH}")
 
     # -----------------------------
-    # Numerical summary
+    # Numerical summary for key result: delta_extremity by (backfire_rate, width)
     # -----------------------------
     print("\n=== KEY RESULT TABLE: delta_extremity by (backfire_rate, width) ===")
     print("Adaptive OFF (cleanest test):\n")
