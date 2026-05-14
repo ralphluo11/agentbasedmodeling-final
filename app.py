@@ -21,7 +21,6 @@ from model import RecommendationBackfireModel
 
 # Helper functions
 
-# Line 34-45 改成：
 def run_simulation(
     num_agents,
     steps,
