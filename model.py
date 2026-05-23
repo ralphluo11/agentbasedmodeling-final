@@ -15,8 +15,6 @@ Core mechanism:
         -> algorithmic update
         -> future recommendation
         -> aggregate polarization or moderation
-
-This version is written for Mesa 3.x.
 """
 
 from mesa import Model
@@ -26,9 +24,8 @@ import numpy as np
 from agents import UserAgent
 
 
-# -----------------------------
-# Model-level reporters
-# -----------------------------
+
+# Model-level reporters for data collection. Each takes the model as input and returns a scalar.
 
 def mean_opinion(model):
     return float(np.mean([a.opinion for a in model.agents]))
@@ -89,7 +86,7 @@ def mean_rejection_threshold(model):
 
 def model_acceptance_rate(model):
     """
-    Share of all exposures that produced acceptance/assimilation.
+    Share of all exposures that leads to acceptance.
     """
     total_accepts = sum(a.accept_count for a in model.agents)
     total_exposures = sum(a.total_exposures for a in model.agents)
@@ -100,7 +97,7 @@ def model_acceptance_rate(model):
 
 def model_ignore_rate(model):
     """
-    Share of all exposures that produced ignore/skip.
+    Share of all exposures that produced ignore.
     """
     total_ignores = sum(a.ignore_count for a in model.agents)
     total_exposures = sum(a.total_exposures for a in model.agents)
@@ -112,10 +109,6 @@ def model_ignore_rate(model):
 def model_backfire_rate(model):
     """
     Share of all exposures that produced rejection/backfire.
-
-    Important: this function is named model_backfire_rate to avoid conflict
-    with the parameter self.backfire_rate, which is the strength of opinion
-    movement after rejection.
     """
     total_rejects = sum(a.reject_count for a in model.agents)
     total_exposures = sum(a.total_exposures for a in model.agents)
@@ -178,11 +171,6 @@ def opinion_bimodality(model):
 def trending_pool_mean(model):
     """
     Mean ideology of the global trending pool at the current step.
-
-    Diagnostic for the cross-user trending channel: shows what aggregate
-    ideological signal the algorithm is currently injecting into all users'
-    exposure distributions. Returns 0.0 when the trending channel is inactive
-    or the pool is empty.
     """
     if not model.trending_pool:
         return 0.0
@@ -192,20 +180,15 @@ def trending_pool_mean(model):
 def trending_pool_std(model):
     """
     Ideological spread (standard deviation) of the global trending pool.
-
-    Together with trending_pool_mean, this characterizes the population-level
-    cross-user signal: a small std means the trending pool has consolidated
-    around a narrow band of content (potential cluster lock-in), while a
-    larger std means trending content remains ideologically diverse.
     """
     if not model.trending_pool or len(model.trending_pool) < 2:
         return 0.0
     return float(np.std(model.trending_pool))
 
 
-# -----------------------------
+
 # Main model
-# -----------------------------
+
 
 class RecommendationBackfireModel(Model):
     """
@@ -287,8 +270,7 @@ class RecommendationBackfireModel(Model):
         self.tolerance_learning_rate = 0.005
         self.defensive_rate = 0.008
 
-        # Usually leave this False for theoretical clarity:
-        # noncommitment means no psychological update.
+        # Usually leave this False: noncommitment means no psychological update.
         self.ignore_changes_tolerance = False
         self.ignore_tolerance_change = 0.0
 
@@ -314,8 +296,6 @@ class RecommendationBackfireModel(Model):
         #   polarized: two clusters around -0.45 and +0.45
         #   uniform:   random opinions across [-1, 1]
         #   moderate:  mostly centered around 0
-        # Each agent is registered with the model automatically by Mesa 3.x
-        # when UserAgent is instantiated with model=self.
         for _ in range(self.num_agents):
             if self.initial_distribution == "uniform":
                 opinion = self.random.uniform(-1.0, 1.0)
@@ -382,10 +362,6 @@ class RecommendationBackfireModel(Model):
         Agents that have not yet accepted any content (empty history) are
         treated as having signature = their current opinion, which is the
         platform's best initial guess at their preferences.
-
-        This function is the channel through which one user's behavior affects
-        what other users see, providing the agent-agent interdependence
-        required for genuine emergent dynamics.
         """
         K = self.k_neighbors
         if len(self.agents) <= 1 or K <= 0:
@@ -519,10 +495,6 @@ class RecommendationBackfireModel(Model):
         self.trending_pool = pool
 
     def step(self):
-        """
-        Mesa 3.x replacement for RandomActivation:
-        shuffle agents, then call each agent's step method.
-        """
         self.agents.shuffle_do("step")
         self.update_trending_pool()
         self.datacollector.collect(self)

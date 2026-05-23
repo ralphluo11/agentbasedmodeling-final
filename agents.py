@@ -3,7 +3,7 @@
 """
 Agent definitions for the recommendation-backfire ABM.
 
-The model represents a simplified algorithmic content platform.
+The model represents a simplified algorithmic content platform (tike YouTube, Facebook, Twitter, etc.) and its users.
 
 Each UserAgent has:
 - an ideological opinion between -1 and 1
@@ -47,17 +47,16 @@ class UserAgent(Agent):
         initial_opinion,
         tolerance_type="mixed",
     ):
-        # Mesa 3.x automatically gives agents a unique ID and registers them with the model.
         super().__init__(model)
 
         self.opinion = float(initial_opinion)
 
         # The recommendation system's learned belief about what this user wants.
-        # Initially, the platform roughly infers the user's preference from their current opinion.
+        # Initially, the platform infers the user's preference directly from their current opinion.
         self.preference_center = float(initial_opinion)
 
         # Larger values mean broader recommendations.
-        # Smaller values mean algorithmically narrower content exposure.
+        # Smaller values mean narrower content exposure.
         self.preference_width = self.model.initial_preference_width
 
         # Assign psychological tolerance.
@@ -66,11 +65,9 @@ class UserAgent(Agent):
         if tolerance_type == "high":
             self.acceptance_threshold = self.model.high_acceptance_threshold
             self.rejection_threshold = self.model.high_rejection_threshold
-
         elif tolerance_type == "low":
             self.acceptance_threshold = self.model.low_acceptance_threshold
             self.rejection_threshold = self.model.low_rejection_threshold
-
         else:
             # Mixed population: draw high or low tolerance probabilistically.
             if self.random.random() < self.model.high_tolerance_share:
@@ -80,13 +77,13 @@ class UserAgent(Agent):
                 self.acceptance_threshold = self.model.low_acceptance_threshold
                 self.rejection_threshold = self.model.low_rejection_threshold
 
-        # Counters used for model-level measurement.
+ 
         self.accept_count = 0
         self.ignore_count = 0
         self.reject_count = 0
         self.total_exposures = 0
 
-        # Store last-step information for debugging / visualization.
+        # Store last recommended content and response for data analysis and visualization.
         self.last_content = None
         self.last_distance = None
         self.last_response = None
@@ -94,11 +91,8 @@ class UserAgent(Agent):
         # Collaborative filtering: record recent accepted content ideologies.
         # The platform uses this history to identify behaviorally similar users,
         # which then influences both the center and the width of future
-        # recommendations (see model.recommend_content and model.find_neighbors).
-        # This is the channel that makes one user's behavior affect what other
-        # users see, providing the genuine agent-agent interdependence required
-        # for the model to behave as an ABM rather than as N independent
-        # single-user simulations.
+        # recommendations (see model.recommend_content).
+
         self.acceptance_history = deque(maxlen=self.model.acceptance_history_length)
 
     def step(self):
@@ -121,11 +115,9 @@ class UserAgent(Agent):
         if distance <= self.acceptance_threshold:
             response = "accept"
             self.accept_content(content_ideology)
-
         elif distance >= self.rejection_threshold:
             response = "reject"
             self.reject_content(content_ideology)
-
         else:
             response = "ignore"
             self.ignore_content(content_ideology)
@@ -134,8 +126,7 @@ class UserAgent(Agent):
 
     def accept_content(self, content_ideology):
         """
-        Acceptance / assimilation.
-
+        Acceptance 
         The agent moves slightly toward the content.
         The platform interprets this as positive feedback and becomes more likely
         to recommend similar content in the future.
@@ -147,21 +138,21 @@ class UserAgent(Agent):
         self.acceptance_history.append(float(content_ideology))
 
         # Opinion assimilation.
-        self.opinion += self.model.assimilation_rate * (
-            content_ideology - self.opinion
-        )
-        self.opinion = self.clip_opinion(self.opinion)
+        self.opinion += self.model.assimilation_rate * (content_ideology - self.opinion)
+        self.opinion = float(np.clip(self.opinion, -1.0, 1.0))
 
-        # Positive feedback:
-        # recommender shifts toward accepted content.
+        # Positive feedback: recommender shifts toward accepted content.
         self.preference_center += self.model.feedback_sensitivity * (
             content_ideology - self.preference_center
         )
-        self.preference_center = self.clip_opinion(self.preference_center)
+        self.preference_center = float(np.clip(self.preference_center, -1.0, 1.0))
 
-        # Accepted content may slightly narrow the recommender around revealed preference.
-        self.preference_width *= self.model.accept_width_multiplier
-        self.preference_width = self.clip_width(self.preference_width)
+        # Accepted content may slightly narrow the the recommender 
+        self.preference_width = float(np.clip(
+            self.preference_width * self.model.accept_width_multiplier,
+            self.model.min_preference_width,
+            self.model.max_preference_width,
+        ))
 
         # Optional adaptive tolerance:
         # successful exposure can make the user slightly more open to future difference.
@@ -180,14 +171,15 @@ class UserAgent(Agent):
 
         self.ignore_count += 1
 
-        # Weak feedback:
-        # the algorithm may very slightly narrow exposure,
+        # Weak feedback: the algorithm may very slightly narrow exposure,
         # but much less than after explicit rejection.
-        self.preference_width *= self.model.ignore_width_multiplier
-        self.preference_width = self.clip_width(self.preference_width)
+        self.preference_width = float(np.clip(
+            self.preference_width * self.model.ignore_width_multiplier,
+            self.model.min_preference_width,
+            self.model.max_preference_width,
+        ))
 
         # For simplicity, ignoring content does not change psychological tolerance.
-        # This corresponds to the Social Judgment Theory noncommitment zone.
         if self.model.adaptive_tolerance and self.model.ignore_changes_tolerance:
             self.acceptance_threshold += self.model.ignore_tolerance_change
             self.rejection_threshold += self.model.ignore_tolerance_change
@@ -208,31 +200,27 @@ class UserAgent(Agent):
 
         self.reject_count += 1
 
-        # Psychological backfire:
-        # move away from content. Direction is based on whether content is to the
-        # left or right of the agent's current opinion.
+        # Psychological backfire: move away from content. Direction is based on
+        # whether content is to the left or right of the agent's current opinion.
         if content_ideology > self.opinion:
-            self.opinion -= self.model.backfire_rate * abs(
-                content_ideology - self.opinion
-            )
+            self.opinion -= self.model.backfire_rate * abs(content_ideology - self.opinion)
         else:
-            self.opinion += self.model.backfire_rate * abs(
-                content_ideology - self.opinion
-            )
+            self.opinion += self.model.backfire_rate * abs(content_ideology - self.opinion)
 
-        self.opinion = self.clip_opinion(self.opinion)
+        self.opinion = float(np.clip(self.opinion, -1.0, 1.0))
 
-        # Negative feedback:
-        # the recommender retreats toward the user's current opinion and narrows.
-        # This abstracts from proprietary algorithms but captures the idea:
-        # "I dislike this" makes similar content less likely in the future.
+        # Negative feedback: the recommender retreats toward the user's current
+        # opinion and narrows. This abstracts the idea: "I dislike this" makes similar content less likely.
         self.preference_center += self.model.feedback_sensitivity * (
             self.opinion - self.preference_center
         )
-        self.preference_center = self.clip_opinion(self.preference_center)
+        self.preference_center = float(np.clip(self.preference_center, -1.0, 1.0))
 
-        self.preference_width *= self.model.reject_width_multiplier
-        self.preference_width = self.clip_width(self.preference_width)
+        self.preference_width = float(np.clip(
+            self.preference_width * self.model.reject_width_multiplier,
+            self.model.min_preference_width,
+            self.model.max_preference_width,
+        ))
 
         # Optional adaptive tolerance:
         # rejection can make the user more defensive in the future.
@@ -241,51 +229,31 @@ class UserAgent(Agent):
             self.rejection_threshold -= self.model.defensive_rate
             self.clip_thresholds()
 
-    def clip_opinion(self, value):
-        """Keep ideological values within [-1, 1]."""
-        return float(np.clip(value, -1.0, 1.0))
-
-    def clip_width(self, value):
-        """Keep recommendation width within a reasonable range."""
-        return float(
-            np.clip(
-                value,
-                self.model.min_preference_width,
-                self.model.max_preference_width,
-            )
-        )
-
     def clip_thresholds(self):
         """
-        Keep thresholds valid and ordered.
+        Keep thresholds valid and ordered to ensure the model behaves as intended.
 
-        acceptance_threshold must remain lower than rejection_threshold.
+        Maintains two invariants that simple np.clip calls do not:
+        each threshold stays within its allowed range, AND
+        rejection_threshold remains at least 0.05 above acceptance_threshold.
         """
 
-        self.acceptance_threshold = float(
-            np.clip(
-                self.acceptance_threshold,
-                self.model.min_acceptance_threshold,
-                self.model.max_acceptance_threshold,
-            )
-        )
+        self.acceptance_threshold = float(np.clip(
+            self.acceptance_threshold,
+            self.model.min_acceptance_threshold,
+            self.model.max_acceptance_threshold,
+        ))
 
-        self.rejection_threshold = float(
-            np.clip(
-                self.rejection_threshold,
-                self.model.min_rejection_threshold,
-                self.model.max_rejection_threshold,
-            )
-        )
+        self.rejection_threshold = float(np.clip(
+            self.rejection_threshold,
+            self.model.min_rejection_threshold,
+            self.model.max_rejection_threshold,
+        ))
 
         # Ensure rejection threshold is always above acceptance threshold.
         if self.rejection_threshold <= self.acceptance_threshold:
-            self.rejection_threshold = self.acceptance_threshold + 0.05
-
-        self.rejection_threshold = float(
-            np.clip(
-                self.rejection_threshold,
+            self.rejection_threshold = float(np.clip(
+                self.acceptance_threshold + 0.05,
                 self.model.min_rejection_threshold,
                 self.model.max_rejection_threshold,
-            )
-        )
+            ))
