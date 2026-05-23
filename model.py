@@ -27,24 +27,11 @@ from agents import UserAgent
 
 
 # -----------------------------
-# Helper
-# -----------------------------
-
-def get_agents(model):
-    """
-    Mesa 3.x stores agents in model.agents.
-    Convert to list so Python and NumPy operations work normally.
-    """
-    return list(model.agents)
-
-
-# -----------------------------
 # Model-level reporters
 # -----------------------------
 
 def mean_opinion(model):
-    opinions = [agent.opinion for agent in get_agents(model)]
-    return float(np.mean(opinions))
+    return float(np.mean([a.opinion for a in model.agents]))
 
 
 def mean_abs_opinion(model):
@@ -52,39 +39,36 @@ def mean_abs_opinion(model):
     Average absolute distance from the ideological center.
     Higher values indicate more ideological extremity.
     """
-    opinions = [agent.opinion for agent in get_agents(model)]
-    return float(np.mean(np.abs(opinions)))
+    return float(np.mean([abs(a.opinion) for a in model.agents]))
 
 
 def opinion_variance(model):
-    opinions = [agent.opinion for agent in get_agents(model)]
-    return float(np.var(opinions))
+    return float(np.var([a.opinion for a in model.agents]))
 
 
 def extreme_share(model):
     """
     Share of agents near ideological extremes.
     """
-    opinions = [agent.opinion for agent in get_agents(model)]
-    if len(opinions) == 0:
+    if len(model.agents) == 0:
         return 0.0
-    return float(np.mean([abs(x) >= model.extreme_cutoff for x in opinions]))
+    return float(np.mean(
+        [abs(a.opinion) >= model.extreme_cutoff for a in model.agents]
+    ))
 
 
 def mean_preference_center(model):
     """
     Average algorithmic estimate of users' preferred content.
     """
-    centers = [agent.preference_center for agent in get_agents(model)]
-    return float(np.mean(centers))
+    return float(np.mean([a.preference_center for a in model.agents]))
 
 
 def mean_abs_preference_center(model):
     """
     Average extremity of the algorithm's learned preference centers.
     """
-    centers = [agent.preference_center for agent in get_agents(model)]
-    return float(np.mean(np.abs(centers)))
+    return float(np.mean([abs(a.preference_center) for a in model.agents]))
 
 
 def mean_preference_width(model):
@@ -92,30 +76,25 @@ def mean_preference_width(model):
     Average breadth of algorithmic recommendation profiles.
     Lower values mean narrower content diets.
     """
-    widths = [agent.preference_width for agent in get_agents(model)]
-    return float(np.mean(widths))
+    return float(np.mean([a.preference_width for a in model.agents]))
 
 
 def mean_acceptance_threshold(model):
-    thresholds = [agent.acceptance_threshold for agent in get_agents(model)]
-    return float(np.mean(thresholds))
+    return float(np.mean([a.acceptance_threshold for a in model.agents]))
 
 
 def mean_rejection_threshold(model):
-    thresholds = [agent.rejection_threshold for agent in get_agents(model)]
-    return float(np.mean(thresholds))
+    return float(np.mean([a.rejection_threshold for a in model.agents]))
 
 
 def model_acceptance_rate(model):
     """
     Share of all exposures that produced acceptance/assimilation.
     """
-    total_accepts = sum(agent.accept_count for agent in get_agents(model))
-    total_exposures = sum(agent.total_exposures for agent in get_agents(model))
-
+    total_accepts = sum(a.accept_count for a in model.agents)
+    total_exposures = sum(a.total_exposures for a in model.agents)
     if total_exposures == 0:
         return 0.0
-
     return float(total_accepts / total_exposures)
 
 
@@ -123,12 +102,10 @@ def model_ignore_rate(model):
     """
     Share of all exposures that produced ignore/skip.
     """
-    total_ignores = sum(agent.ignore_count for agent in get_agents(model))
-    total_exposures = sum(agent.total_exposures for agent in get_agents(model))
-
+    total_ignores = sum(a.ignore_count for a in model.agents)
+    total_exposures = sum(a.total_exposures for a in model.agents)
     if total_exposures == 0:
         return 0.0
-
     return float(total_ignores / total_exposures)
 
 
@@ -140,12 +117,10 @@ def model_backfire_rate(model):
     with the parameter self.backfire_rate, which is the strength of opinion
     movement after rejection.
     """
-    total_rejects = sum(agent.reject_count for agent in get_agents(model))
-    total_exposures = sum(agent.total_exposures for agent in get_agents(model))
-
+    total_rejects = sum(a.reject_count for a in model.agents)
+    total_exposures = sum(a.total_exposures for a in model.agents)
     if total_exposures == 0:
         return 0.0
-
     return float(total_rejects / total_exposures)
 
 
@@ -154,15 +129,10 @@ def average_exposure_distance(model):
     Average ideological distance between agents and their most recently
     recommended content.
     """
-    distances = [
-        agent.last_distance
-        for agent in get_agents(model)
-        if agent.last_distance is not None
-    ]
-
+    distances = [a.last_distance for a in model.agents
+                 if a.last_distance is not None]
     if len(distances) == 0:
         return 0.0
-
     return float(np.mean(distances))
 
 
@@ -175,13 +145,12 @@ def mean_acceptance_history_length(model):
     at a given step. Early in a run this will be near zero; in long-running
     or high-acceptance regimes it approaches 1.
     """
-    if len(get_agents(model)) == 0:
+    if len(model.agents) == 0:
         return 0.0
-    lengths = [
-        len(agent.acceptance_history) / model.acceptance_history_length
-        for agent in get_agents(model)
-    ]
-    return float(np.mean(lengths))
+    return float(np.mean([
+        len(a.acceptance_history) / model.acceptance_history_length
+        for a in model.agents
+    ]))
 
 
 def opinion_bimodality(model):
@@ -191,10 +160,9 @@ def opinion_bimodality(model):
     a single-mode distribution. This complements opinion_variance for
     detecting emergent multi-cluster structure under collaborative filtering.
     """
-    opinions = np.array([agent.opinion for agent in get_agents(model)])
+    opinions = np.array([a.opinion for a in model.agents])
     if len(opinions) < 2:
         return 0.0
-    # Hartigan-style heuristic: compare empirical variance to gap between two halves.
     median = float(np.median(opinions))
     left = opinions[opinions < median]
     right = opinions[opinions >= median]
@@ -268,29 +236,15 @@ class RecommendationBackfireModel(Model):
         self.initial_preference_width = initial_preference_width
         self.adaptive_tolerance = adaptive_tolerance
         self.assimilation_rate = assimilation_rate
+        self.backfire_rate = backfire_rate
 
-        # Collaborative-filtering strength.
-        # 0.0 = each agent's recommendations depend only on their own history
-        #       (the individual-learning baseline used in v1 of this model).
-        # 1.0 = recommendations depend only on the aggregate behavior of the
-        #       K most behaviorally similar agents, with no individual signal.
-        # Intermediate values mix the two. This parameter is the central new
-        # axis introduced in v2 and is swept as an experimental dimension.
+        # Cross-user signaling weights.
+        # social_signal_weight: local collaborative-filtering strength.
+        # trending_weight: global ideology-agnostic viral channel strength.
+        # Together they must sum to <= 1; when both are 0 the model reduces
+        # to the individual-learning baseline.
         self.social_signal_weight = social_signal_weight
-
-        # Global-trending strength (ideology-agnostic viral channel).
-        # 0.0 = no trending injection.
-        # > 0  = a fraction of each recommendation is drawn from a population-
-        #        wide pool of recently-accepted content. Unlike the local
-        #        collaborative-filtering channel, this pool is the SAME for
-        #        every agent regardless of their own opinion or cluster: it
-        #        operationalizes the "viral content" / "trending topic" channel
-        #        on real platforms, which pushes the same widely-engaged
-        #        content to everyone independent of personalization.
-        # Together, social_signal_weight + trending_weight must be <= 1.
         self.trending_weight = trending_weight
-
-        # Constraint check.
         if self.social_signal_weight + self.trending_weight > 1.0:
             raise ValueError(
                 "social_signal_weight + trending_weight must be <= 1.0; "
@@ -299,39 +253,26 @@ class RecommendationBackfireModel(Model):
 
         # Collaborative-filtering structural parameters (held fixed across
         # experiments; the substantive variation is captured by
-        # social_signal_weight above).
+        # social_signal_weight).
         self.k_neighbors = 5
         self.acceptance_history_length = 10
 
-        # Trending-pool structural parameters.
-        # The pool stores all acceptance events within the last
-        # trending_pool_window steps across the population, and the algorithm
-        # samples uniformly from this pool when injecting trending content.
+        # Trending pool: refreshed at the end of each step by concatenating
+        # all agents' acceptance histories across the population.
         self.trending_pool_window = 5
-        # Initialized as an empty list; populated at the end of each step.
         self.trending_pool = []
 
-        # Cluster-level width modulation.
-        # When the K-nearest neighborhood has high recent acceptance, the
-        # algorithm interprets this as evidence that members of this cluster
-        # prefer narrower content; preference widths tighten. When neighborhood
-        # acceptance is low, widths loosen. These are cluster-level effects:
-        # similar agents experience parallel changes even when their own
-        # individual reactions differ.
+        # Cluster-level width modulation: high cluster acceptance tightens
+        # widths in synchrony, low cluster acceptance loosens them.
         self.cluster_high_accept_threshold = 0.60
         self.cluster_low_accept_threshold = 0.30
         self.cluster_tighten_multiplier = 0.90
         self.cluster_loosen_multiplier = 1.10
 
-        # This is the strength of opinion movement after rejection.
-        # It is not the same as the measured "Backfire Rate."
-        self.backfire_rate = backfire_rate
-
         # Psychological threshold parameters.
         # High-tolerance agents accept more disagreement and reject only distant content.
         self.high_acceptance_threshold = 0.35
         self.high_rejection_threshold = 0.85
-
         # Low-tolerance agents have a narrow acceptance zone and reject more easily.
         self.low_acceptance_threshold = 0.18
         self.low_rejection_threshold = 0.55
@@ -366,9 +307,38 @@ class RecommendationBackfireModel(Model):
         # Measurement.
         self.extreme_cutoff = 0.75
 
-        # Create agents before collecting data.
-        self.create_agents()
+        # -----------------------------
+        # Create agents inline.
+        # -----------------------------
+        # Initial opinion is drawn from one of three distributions:
+        #   polarized: two clusters around -0.45 and +0.45
+        #   uniform:   random opinions across [-1, 1]
+        #   moderate:  mostly centered around 0
+        # Each agent is registered with the model automatically by Mesa 3.x
+        # when UserAgent is instantiated with model=self.
+        for _ in range(self.num_agents):
+            if self.initial_distribution == "uniform":
+                opinion = self.random.uniform(-1.0, 1.0)
+            elif self.initial_distribution == "moderate":
+                opinion = np.random.normal(loc=0.0, scale=0.25)
+            else:
+                # Default: mildly polarized population.
+                # Half starts left-of-center, half starts right-of-center.
+                if self.random.random() < 0.5:
+                    opinion = np.random.normal(loc=-0.45, scale=0.18)
+                else:
+                    opinion = np.random.normal(loc=0.45, scale=0.18)
+            opinion = float(np.clip(opinion, -1.0, 1.0))
 
+            UserAgent(
+                model=self,
+                initial_opinion=opinion,
+                tolerance_type="mixed",
+            )
+
+        # -----------------------------
+        # Data collection.
+        # -----------------------------
         self.datacollector = DataCollector(
             model_reporters={
                 "Mean Opinion": mean_opinion,
@@ -400,50 +370,7 @@ class RecommendationBackfireModel(Model):
                 "Last Response": "last_response",
             },
         )
-
         self.datacollector.collect(self)
-
-    def create_agents(self):
-        """
-        Create agents with initial ideological opinions.
-
-        In Mesa 3.x, agents automatically register with the model when created.
-        """
-
-        for _ in range(self.num_agents):
-            initial_opinion = self.draw_initial_opinion()
-
-            UserAgent(
-                model=self,
-                initial_opinion=initial_opinion,
-                tolerance_type="mixed",
-            )
-
-    def draw_initial_opinion(self):
-        """
-        Draw an initial ideological opinion.
-
-        Initial distributions:
-        - polarized: two clusters around -0.45 and +0.45
-        - uniform: random opinions across [-1, 1]
-        - moderate: mostly centered around 0
-        """
-
-        if self.initial_distribution == "uniform":
-            opinion = self.random.uniform(-1.0, 1.0)
-
-        elif self.initial_distribution == "moderate":
-            opinion = np.random.normal(loc=0.0, scale=0.25)
-
-        else:
-            # Default: mildly polarized population.
-            # Half starts left-of-center, half starts right-of-center.
-            if self.random.random() < 0.5:
-                opinion = np.random.normal(loc=-0.45, scale=0.18)
-            else:
-                opinion = np.random.normal(loc=0.45, scale=0.18)
-
-        return float(np.clip(opinion, -1.0, 1.0))
 
     def find_neighbors(self, agent):
         """
@@ -460,11 +387,8 @@ class RecommendationBackfireModel(Model):
         what other users see, providing the agent-agent interdependence
         required for genuine emergent dynamics.
         """
-
-        all_agents = self.agents
         K = self.k_neighbors
-
-        if len(all_agents) <= 1 or K <= 0:
+        if len(self.agents) <= 1 or K <= 0:
             return []
 
         target_sig = (
@@ -473,9 +397,8 @@ class RecommendationBackfireModel(Model):
             else agent.opinion
         )
 
-        # Score every other agent by similarity (negative distance).
         scored = []
-        for other in all_agents:
+        for other in self.agents:
             if other is agent:
                 continue
             other_sig = (
@@ -486,7 +409,6 @@ class RecommendationBackfireModel(Model):
             similarity = -abs(target_sig - other_sig)
             scored.append((similarity, other))
 
-        # Top K by similarity (highest = closest signature).
         scored.sort(key=lambda x: x[0], reverse=True)
         return [other for (_, other) in scored[:K]]
 
@@ -499,28 +421,22 @@ class RecommendationBackfireModel(Model):
 
         1. Individual preference (always present, weight = 1 - w_social - w_trending).
            Uses the agent's own preference_center and preference_width, updated
-           by their own past responses. Equivalent to the v1 model.
+           by their own past responses.
 
         2. Local collaborative filtering (weight = w_social).
            The K most behaviorally similar agents (similar acceptance histories)
            contribute their mean recently-accepted content to the center, and
            their aggregate acceptance rate modulates the width (high cluster
            acceptance tightens widths in synchrony; low cluster acceptance
-           loosens them). Channel 2 is what makes the model "non-reducible"
-           to N independent single-user simulations: one user's behavior
-           influences what behaviorally similar users see.
+           loosens them).
 
         3. Global trending (weight = w_trending).
            The same pool of recently-accepted content from the population is
-           sampled for every agent regardless of similarity or ideology. This
-           operationalizes the "viral" or "trending topic" channel on real
-           platforms, which pushes widely-engaged content to all users
-           independent of personalization.
+           sampled for every agent regardless of similarity or ideology.
 
         The three weights sum to 1. When w_social = w_trending = 0, the model
-        reduces to v1 individual learning.
+        reduces to the individual-learning baseline.
         """
-
         w_social = self.social_signal_weight
         w_trending = self.trending_weight
         w_individual = 1.0 - w_social - w_trending
@@ -559,8 +475,7 @@ class RecommendationBackfireModel(Model):
 
         # Channel 3: global trending.
         # If the pool is non-empty, the trending center is the mean of the
-        # global pool, sampled uniformly. If empty (e.g. step 0), fall back
-        # to the individual channel.
+        # global pool. If empty (e.g. step 0), fall back to the individual channel.
         if w_trending > 0 and len(self.trending_pool) > 0:
             trending_center = float(np.mean(self.trending_pool))
         else:
@@ -589,8 +504,8 @@ class RecommendationBackfireModel(Model):
 
     def update_trending_pool(self):
         """
-        Refresh the global trending pool with all acceptance events from the
-        last trending_pool_window steps. Called at the end of each step.
+        Refresh the global trending pool with all acceptance events held in
+        agents' acceptance_history deques. Called at the end of each step.
         """
         if self.trending_weight <= 0:
             # Skip computation when trending channel is disabled.
@@ -598,14 +513,8 @@ class RecommendationBackfireModel(Model):
             return
 
         pool = []
-        # The acceptance_history deque already holds the most recent
-        # trending_pool_window accepts in the order they happened (well,
-        # all accepts up to acceptance_history_length). We use the most
-        # recent items only.
         for agent in self.agents:
             if len(agent.acceptance_history) > 0:
-                # Take all of agent's recent accepts (deque is already
-                # capped at acceptance_history_length).
                 pool.extend(list(agent.acceptance_history))
         self.trending_pool = pool
 
