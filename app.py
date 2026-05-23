@@ -1,10 +1,18 @@
 # app.py
 
 """
-This app allows you to change model parameters, run the simulation, and visualize model outcomes.
+Solara app for the recommendation-backfire ABM.
+
+Run with:
+
+    solara run app.py
+
+This app allows you to change model parameters, run the simulation,
+and visualize model outcomes.
 
 Core mechanism:
-content recommendation
+
+    content recommendation
         -> psychological response
         -> user feedback
         -> algorithmic update
@@ -19,7 +27,9 @@ import matplotlib.pyplot as plt
 from model import RecommendationBackfireModel
 
 
+# -----------------------------
 # Helper functions
+# -----------------------------
 
 def run_simulation(
     num_agents,
@@ -30,21 +40,25 @@ def run_simulation(
     assimilation_rate,
     backfire_rate,
     initial_distribution,
+    social_signal_weight,
+    trending_weight,
     seed,
 ):
     """
-    Create and run one model instance with the given parameters, then return the model and collected data.
+    Create and run one model instance.
     """
 
     model = RecommendationBackfireModel(
         num_agents=num_agents,
         initial_distribution=initial_distribution,
         high_tolerance_share=high_tolerance_share,
-        feedback_sensitivity=0.25,           # ← hardcoded here
+        feedback_sensitivity=0.25,
         initial_preference_width=initial_preference_width,
         adaptive_tolerance=adaptive_tolerance,
         assimilation_rate=assimilation_rate,
         backfire_rate=backfire_rate,
+        social_signal_weight=social_signal_weight,
+        trending_weight=trending_weight,
         seed=seed,
     )
 
@@ -58,7 +72,7 @@ def run_simulation(
 
 def make_line_plot(model_data, y_column, title, y_label):
     """
-Create a simple line plot for a given model variable over time.
+    Create a simple Matplotlib line plot for one model-level variable.
     """
 
     fig, ax = plt.subplots(figsize=(6, 4))
@@ -74,7 +88,10 @@ Create a simple line plot for a given model variable over time.
 
 def make_feedback_rates_plot(model_data):
     """
-    Plot acceptance, ignore, and backfire rates together to show the user feedback process.
+    Plot acceptance, ignore, and backfire rates together.
+
+    This directly shows the behavioral feedback process:
+    users accept some content, ignore some content, and reject some content.
     """
 
     fig, ax = plt.subplots(figsize=(7, 4))
@@ -85,7 +102,7 @@ def make_feedback_rates_plot(model_data):
 
     ax.set_xlabel("Step")
     ax.set_ylabel("Cumulative share of exposures")
-    ax.set_title("Cumulative User Response Rates Over Time")
+    ax.set_title("User Response Rates Over Time")
     ax.legend()
     ax.grid(True, alpha=0.3)
     fig.tight_layout()
@@ -95,7 +112,10 @@ def make_feedback_rates_plot(model_data):
 
 def make_opinion_vs_algorithm_plot(model_data):
     """
-    Plot user opinion extremity and algorithmic preference-center extremity to show the feedback loop between user psychology and algorithmic updating.
+    Plot user opinion extremity and algorithmic preference-center extremity.
+
+    This helps show whether the recommender's learned profile becomes more
+    extreme together with the users.
     """
 
     fig, ax = plt.subplots(figsize=(7, 4))
@@ -123,7 +143,7 @@ def make_opinion_vs_algorithm_plot(model_data):
 
 def make_final_opinion_histogram(model):
     """
-    Create a histogram of final agent opinions to show the overall ideological distribution at the end of the simulation.
+    Create a histogram of final agent opinions.
     """
 
     opinions = [agent.opinion for agent in model.agents]
@@ -157,28 +177,10 @@ def make_preference_width_histogram(model):
     return fig
 
 
-def make_threshold_scatter(model):
-    """
-    Scatter plot showing final opinion and final acceptance threshold for each agent. This can reveal whether users with different opinions also have different tolerance levels, which may indicate that the adaptive tolerance mechanism is producing heterogeneous outcomes.
-    """
-
-    opinions = [agent.opinion for agent in model.agents]
-    thresholds = [agent.acceptance_threshold for agent in model.agents]
-
-    fig, ax = plt.subplots(figsize=(6, 4))
-    ax.scatter(opinions, thresholds, alpha=0.6)
-    ax.set_xlabel("Final opinion")
-    ax.set_ylabel("Final acceptance threshold")
-    ax.set_title("Final Opinion and Acceptance Threshold")
-    ax.grid(True, alpha=0.3)
-    fig.tight_layout()
-
-    return fig
-
-
 def make_summary_items(model_data):
     """
     Return final summary metrics as a list of display tuples.
+    This avoids Solara DataFrame pagination.
     """
 
     final = model_data.iloc[-1]
@@ -255,8 +257,9 @@ def SummaryGrid(model_data):
                 compact_metric_row(name, value, description)
 
 
-
-# Reactive state to hold model parameters and results
+# -----------------------------
+# Reactive state
+# -----------------------------
 
 num_agents_state = solara.reactive(200)
 steps_state = solara.reactive(150)
@@ -268,14 +271,22 @@ backfire_rate_state = solara.reactive(0.06)
 initial_distribution_state = solara.reactive("polarized")
 seed_state = solara.reactive(42)
 
+# v2: cross-user signal channels
+# Defaults are non-zero so a first-time user sees all three channels active
+# (individual + local collaborative filtering + global trending) and can
+# observe the cross-user dynamics in the plots. Set to 0 to disable.
+social_signal_weight_state = solara.reactive(0.3)
+trending_weight_state = solara.reactive(0.3)
+
 model_state = solara.reactive(None)
 model_data_state = solara.reactive(None)
 agent_data_state = solara.reactive(None)
 has_run_state = solara.reactive(False)
 
 
-# Solara Page component and section layout
-
+# -----------------------------
+# Solara Page
+# -----------------------------
 
 @solara.component
 def Page():
@@ -285,6 +296,10 @@ def Page():
         solara.Markdown(
             """
 # Recommendation Backfire ABM
+
+**Research question:**  
+When do recommendation systems reduce polarization by exposing users to cross-cutting content, and when do user feedback loops cause such exposure to backfire by narrowing future recommendations and reinforcing ideological extremity?
+
 The model represents a simplified content recommendation platform:
 
 1. The platform recommends ideological content to each user.
@@ -377,6 +392,38 @@ Lower values mean more ideologically narrow recommendations.
                 step=0.05,
             )
 
+            solara.Markdown(
+                f"""
+**Local collaborative-filtering weight (social signal):** `{social_signal_weight_state.value:.2f}`  
+How much the algorithm uses the recent accepted content of similar users to personalize each agent's recommendation.  
+0 disables this channel; higher values let cluster-level acceptance patterns influence the content center and width.
+"""
+            )
+            solara.SliderFloat(
+                "Local collaborative-filtering weight",
+                value=social_signal_weight_state,
+                min=0.0,
+                max=0.9,
+                step=0.05,
+            )
+
+            solara.Markdown(
+                f"""
+**Global trending weight (cross-user signal):** `{trending_weight_state.value:.2f}`  
+How much each agent's recommendation is pulled toward the population-level mean of recently accepted content (the "viral" / "trending" channel).  
+0 disables this channel; higher values mean trending content is more strongly injected into every user's exposure, regardless of personalization.
+
+**Note:** Local CF + global trending must sum to at most 1.0.
+"""
+            )
+            solara.SliderFloat(
+                "Global trending weight",
+                value=trending_weight_state,
+                min=0.0,
+                max=0.9,
+                step=0.05,
+            )
+
             solara.Markdown("---")
 
             # -----------------------------
@@ -462,7 +509,16 @@ Higher values mean rejected content produces stronger polarization pressure.
             )
 
             solara.Markdown("---")
+
             def on_run():
+                # Validate constraint: social + trending must be <= 1.0.
+                # If the user has pushed both sliders too high, cap trending.
+                sw = social_signal_weight_state.value
+                tw = trending_weight_state.value
+                if sw + tw > 1.0:
+                    tw = max(0.0, 1.0 - sw)
+                    trending_weight_state.value = tw
+
                 model, model_data, agent_data = run_simulation(
                     num_agents=num_agents_state.value,
                     steps=steps_state.value,
@@ -472,6 +528,8 @@ Higher values mean rejected content produces stronger polarization pressure.
                     assimilation_rate=assimilation_rate_state.value,
                     backfire_rate=backfire_rate_state.value,
                     initial_distribution=initial_distribution_state.value,
+                    social_signal_weight=sw,
+                    trending_weight=tw,
                     seed=seed_state.value,
                 )
 
@@ -553,39 +611,6 @@ Higher values indicate stronger movement toward ideological poles.
                 )
 
             with solara.Column():
-                fig2 = make_line_plot(
-                    model_data,
-                    "Opinion Variance",
-                    "Opinion Variance Over Time",
-                    "Opinion variance",
-                )
-                solara.FigureMatplotlib(fig2)
-                solara.Markdown(
-                    """
-**How to read this plot:**  
-Opinion variance measures how dispersed the population is.  
-Higher variance means users are spread farther apart ideologically.
-"""
-                )
-
-        with solara.Columns([1, 1]):
-            with solara.Column():
-                fig3 = make_line_plot(
-                    model_data,
-                    "Backfire Rate",
-                    "Cumulative Backfire Rate Over Time",
-                    "Cumulative backfire rate",
-                )
-                solara.FigureMatplotlib(fig3)
-                solara.Markdown(
-                    """
-**How to read this plot:**  
-Backfire rate measures how often recommendations fall into users' rejection zones.  
-If this falls over time, the platform is reducing exposure to content users reject.
-"""
-                )
-
-            with solara.Column():
                 fig4 = make_line_plot(
                     model_data,
                     "Mean Preference Width",
@@ -598,6 +623,90 @@ If this falls over time, the platform is reducing exposure to content users reje
 **How to read this plot:**  
 Preference width measures how broad or narrow the recommendation environment is.  
 A falling line means the algorithm is narrowing future exposure around what users appear to prefer.
+"""
+                )
+
+        # Cross-user signal diagnostics (v2)
+        solara.Markdown("## Cross-User Signal Diagnostics")
+        solara.Markdown(
+            """
+These plots make visible what the collaborative-filtering and trending channels are
+actually doing across the population. They are most informative when the
+**Local collaborative-filtering weight** or **Global trending weight** sliders are above zero.
+"""
+        )
+
+        with solara.Columns([1, 1]):
+            with solara.Column():
+                fig_bimod = make_line_plot(
+                    model_data,
+                    "Opinion Bimodality",
+                    "Opinion Bimodality Over Time",
+                    "Bimodality index",
+                )
+                solara.FigureMatplotlib(fig_bimod)
+                solara.Markdown(
+                    """
+**How to read this plot:**  
+Bimodality measures whether opinions cluster into two (or more) groups rather than spreading evenly.  
+Higher values indicate stronger emergent cluster formation.
+"""
+                )
+
+            with solara.Column():
+                fig_hist = make_line_plot(
+                    model_data,
+                    "Mean Acceptance History Filled",
+                    "Acceptance History Coverage Over Time",
+                    "Mean fill (0 - 1)",
+                )
+                solara.FigureMatplotlib(fig_hist)
+                solara.Markdown(
+                    """
+**How to read this plot:**  
+This shows how much of each agent's recent-acceptance memory is filled with data.  
+This is informative when collaborative filtering or trending channels are active:
+early in a run the cross-user signal is weak (memories are empty); long-running or
+high-acceptance regimes have stronger collaborative signal.
+"""
+                )
+
+        with solara.Columns([1, 1]):
+            with solara.Column():
+                fig_trend_mean = make_line_plot(
+                    model_data,
+                    "Trending Pool Mean",
+                    "Trending Pool Mean Ideology Over Time",
+                    "Trending pool mean",
+                )
+                solara.FigureMatplotlib(fig_trend_mean)
+                solara.Markdown(
+                    """
+**How to read this plot:**  
+The trending pool is the population-level pool of recently accepted content
+that the algorithm injects into each user's recommendation when the global
+trending weight is above zero. This line shows the **mean ideology** of that
+pool over time: drift away from zero indicates that a dominant ideological
+side is producing more of the population's accepted content. When the trending
+weight is zero, this line is flat at zero (the channel is inactive).
+"""
+                )
+
+            with solara.Column():
+                fig_trend_std = make_line_plot(
+                    model_data,
+                    "Trending Pool Std",
+                    "Trending Pool Ideological Spread Over Time",
+                    "Trending pool standard deviation",
+                )
+                solara.FigureMatplotlib(fig_trend_std)
+                solara.Markdown(
+                    """
+**How to read this plot:**  
+Standard deviation of ideology within the trending pool. Larger values mean
+trending content remains ideologically diverse; smaller values mean the pool
+has consolidated around a narrow band of content, which can indicate cluster
+lock-in. Flat at zero when the trending channel is inactive.
 """
                 )
 
@@ -626,19 +735,6 @@ Lower values mean more personalized and narrower content exposure.
 """
                 )
 
-        solara.Markdown("## Adaptive Tolerance Visualization")
-
-        fig7 = make_threshold_scatter(model)
-        solara.FigureMatplotlib(fig7)
-        solara.Markdown(
-            """
-        **How to read this plot:**  
-        This shows whether users with different final opinions also have different acceptance thresholds.  
-        If many points cluster near the upper or lower threshold limits, the adaptive tolerance rule may be too strong and should be adjusted.
-
-        **Note:** If adaptive tolerance is OFF, all agents retain their initial thresholds (0.18 for low-tolerance, 0.35 for high-tolerance) and the scatter will show only two horizontal lines—this is expected.
-        """
-        )
         solara.Markdown("## Raw Model Data")
 
         solara.DataFrame(model_data.reset_index(), items_per_page=10)

@@ -1,7 +1,10 @@
 # agents.py
 
 """
-The model represents a simplified algorithmic content platform. The agent refers to a singe user on the platform.
+Agent definitions for the recommendation-backfire ABM.
+
+The model represents a simplified algorithmic content platform.
+
 Each UserAgent has:
 - an ideological opinion between -1 and 1
 - psychological thresholds based on Social Judgment Theory
@@ -12,13 +15,17 @@ The user then accepts, ignores, or rejects the content depending on ideological 
 That response affects both the user's opinion and the recommender's future behavior.
 """
 
+from collections import deque
+
 from mesa import Agent
 import numpy as np
 
 
 class UserAgent(Agent):
     """
-    User idelogical Opinion scale:
+    A platform user with an ideological opinion and psychological thresholds.
+
+    Opinion scale:
         -1 = one ideological pole
          0 = moderate / center
         +1 = opposite ideological pole
@@ -40,15 +47,17 @@ class UserAgent(Agent):
         initial_opinion,
         tolerance_type="mixed",
     ):
-        
+        # Mesa 3.x automatically gives agents a unique ID and registers them with the model.
         super().__init__(model)
 
         self.opinion = float(initial_opinion)
 
-        # Initially, the platform roughly knows exactly user's preference from their current opinion.
+        # The recommendation system's learned belief about what this user wants.
+        # Initially, the platform roughly infers the user's preference from their current opinion.
         self.preference_center = float(initial_opinion)
 
-        # Larger values mean broader recommendationsand smaller values mean narrower recommendations.
+        # Larger values mean broader recommendations.
+        # Smaller values mean algorithmically narrower content exposure.
         self.preference_width = self.model.initial_preference_width
 
         # Assign psychological tolerance.
@@ -77,10 +86,20 @@ class UserAgent(Agent):
         self.reject_count = 0
         self.total_exposures = 0
 
-        # Store last-step
+        # Store last-step information for debugging / visualization.
         self.last_content = None
         self.last_distance = None
         self.last_response = None
+
+        # Collaborative filtering: record recent accepted content ideologies.
+        # The platform uses this history to identify behaviorally similar users,
+        # which then influences both the center and the width of future
+        # recommendations (see model.recommend_content and model.find_neighbors).
+        # This is the channel that makes one user's behavior affect what other
+        # users see, providing the genuine agent-agent interdependence required
+        # for the model to behave as an ABM rather than as N independent
+        # single-user simulations.
+        self.acceptance_history = deque(maxlen=self.model.acceptance_history_length)
 
     def step(self):
         """
@@ -124,23 +143,28 @@ class UserAgent(Agent):
 
         self.accept_count += 1
 
+        # Record the accepted content for collaborative-filtering similarity.
+        self.acceptance_history.append(float(content_ideology))
+
         # Opinion assimilation.
         self.opinion += self.model.assimilation_rate * (
             content_ideology - self.opinion
         )
         self.opinion = self.clip_opinion(self.opinion)
 
-        # Positive feedback: recommender shifts toward accepted content.
+        # Positive feedback:
+        # recommender shifts toward accepted content.
         self.preference_center += self.model.feedback_sensitivity * (
             content_ideology - self.preference_center
         )
         self.preference_center = self.clip_opinion(self.preference_center)
 
-        # Accepted content slightly narrow the recommender around revealed preference.
+        # Accepted content may slightly narrow the recommender around revealed preference.
         self.preference_width *= self.model.accept_width_multiplier
         self.preference_width = self.clip_width(self.preference_width)
 
-        # adaptive tolerance: successful exposure can make the user slightly more open to future difference.
+        # Optional adaptive tolerance:
+        # successful exposure can make the user slightly more open to future difference.
         if self.model.adaptive_tolerance:
             self.acceptance_threshold += self.model.tolerance_learning_rate
             self.rejection_threshold += self.model.tolerance_learning_rate
@@ -156,11 +180,14 @@ class UserAgent(Agent):
 
         self.ignore_count += 1
 
-        #  when it is ingore: the algorithm may very slightly narrow exposure,but much less than after explicit rejection.
+        # Weak feedback:
+        # the algorithm may very slightly narrow exposure,
+        # but much less than after explicit rejection.
         self.preference_width *= self.model.ignore_width_multiplier
         self.preference_width = self.clip_width(self.preference_width)
 
-        # Ignoring content does not change psychological tolerance, corresponds to the Social Judgment Theory noncommitment zone.
+        # For simplicity, ignoring content does not change psychological tolerance.
+        # This corresponds to the Social Judgment Theory noncommitment zone.
         if self.model.adaptive_tolerance and self.model.ignore_changes_tolerance:
             self.acceptance_threshold += self.model.ignore_tolerance_change
             self.rejection_threshold += self.model.ignore_tolerance_change
@@ -181,7 +208,9 @@ class UserAgent(Agent):
 
         self.reject_count += 1
 
-        # Psychological backfire: move away from content. Direction is based on whether content is to the left or right of the agent's current opinion.
+        # Psychological backfire:
+        # move away from content. Direction is based on whether content is to the
+        # left or right of the agent's current opinion.
         if content_ideology > self.opinion:
             self.opinion -= self.model.backfire_rate * abs(
                 content_ideology - self.opinion
@@ -193,8 +222,8 @@ class UserAgent(Agent):
 
         self.opinion = self.clip_opinion(self.opinion)
 
-        
-        #  when the feedback is negative, the recommender retreats toward the user's current opinion and narrows.
+        # Negative feedback:
+        # the recommender retreats toward the user's current opinion and narrows.
         # This abstracts from proprietary algorithms but captures the idea:
         # "I dislike this" makes similar content less likely in the future.
         self.preference_center += self.model.feedback_sensitivity * (
@@ -205,8 +234,8 @@ class UserAgent(Agent):
         self.preference_width *= self.model.reject_width_multiplier
         self.preference_width = self.clip_width(self.preference_width)
 
-        
-        # adaptive tolerance leads to rejection that can make the user more defensive in the future.
+        # Optional adaptive tolerance:
+        # rejection can make the user more defensive in the future.
         if self.model.adaptive_tolerance:
             self.acceptance_threshold -= self.model.defensive_rate
             self.rejection_threshold -= self.model.defensive_rate

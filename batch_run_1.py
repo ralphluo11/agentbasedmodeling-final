@@ -1,16 +1,39 @@
-# batch_run.py (v2)
+# batch_run_2.py
 
 """
-Batch experiment for the recommendation-backfire ABM.
-This script runs a large number of model instances across a sweep of key parameters,
-collects final-step metrics, and saves the results to a CSV file for later analysis.
+Batch experiment for the recommendation-backfire ABM (v2: collaborative + trending).
+
+This version adds two new sweep axes on top of v1:
+    - social_signal_weight: local collaborative-filtering strength
+    - trending_weight:      global ideology-agnostic viral channel strength
+
+These two channels are the agent-agent interdependence the v1 model lacked:
+behaviorally similar users now influence each other's recommendations, and a
+global pool of recently-accepted content circulates across the population.
+
+Sweep dimensions (full grid):
+    - initial_preference_width        x 3  : {0.20, 0.50, 1.00}
+    - adaptive_tolerance              x 2  : {True, False}
+    - initial_distribution            x 3  : {polarized, uniform, moderate}
+    - (social_signal_weight, trending_weight) x 4 :
+          (0.0, 0.0)  — v1 individual baseline
+          (0.5, 0.0)  — pure local collaborative filtering
+          (0.0, 0.5)  — pure global trending
+          (0.4, 0.4)  — hybrid (realistic platform)
+    - seed                            x 20
+
+Total: 3 x 2 x 3 x 4 x 20 = 1,440 runs.
+
+Run with:
+    python batch_run_2.py
+
+After it finishes, run batch_analysis_2.py to produce figures.
 """
 
 import time
 import itertools
 from multiprocessing import Pool, cpu_count
 
-import numpy as np
 import pandas as pd
 
 from model import RecommendationBackfireModel
@@ -20,22 +43,20 @@ from model import RecommendationBackfireModel
 # Experiment configuration
 # -----------------------------
 
-# Main sweep: algorithmic recommendation diversity.
-PREFERENCE_WIDTHS = [0.10, 0.20, 0.30, 0.40, 0.50, 0.60, 0.70, 0.85, 1.00]
-
-# Ablation: adaptive tolerance on or off.
+PREFERENCE_WIDTHS = [0.20, 0.50, 1.00]
 ADAPTIVE_TOLERANCE_VALUES = [True, False]
-
-# Initial ideological distribution of agents.
-# polarized: two clusters around +/- 0.45 (default in model.py)
-# uniform:   random across [-1, 1]
-# moderate:  centered around 0 with small spread
 INITIAL_DISTRIBUTIONS = ["polarized", "uniform", "moderate"]
 
-# Independent random seeds per cell.
+# Four collaborative-filtering regimes. Each pair is (social, trending).
+SOCIAL_TRENDING_REGIMES = [
+    (0.0, 0.0),    # v1 baseline (individual learning only)
+    (0.5, 0.0),    # pure local CF
+    (0.0, 0.5),    # pure global trending
+    (0.4, 0.4),    # hybrid (realistic platform)
+]
+
 N_SEEDS = 20
 
-# Fixed model parameters.
 FIXED_PARAMS = {
     "num_agents": 200,
     "high_tolerance_share": 0.5,
@@ -46,7 +67,18 @@ FIXED_PARAMS = {
 
 N_STEPS = 100
 
-OUTPUT_PATH = "batch_results.csv"
+OUTPUT_PATH = "batch_results_v2.csv"
+
+
+def regime_label(s, t):
+    """Human-readable label for a (social, trending) pair."""
+    if s == 0.0 and t == 0.0:
+        return "individual_baseline"
+    if s > 0 and t == 0.0:
+        return "local_cf"
+    if s == 0.0 and t > 0:
+        return "global_trending"
+    return "hybrid"
 
 
 # -----------------------------
@@ -55,16 +87,18 @@ OUTPUT_PATH = "batch_results.csv"
 
 def run_one(args):
     """
-    Run one model instance and return a dict of final-step metrics.
+    Run one model instance and return a dict of summary metrics.
     Designed to be called inside multiprocessing.Pool.
     """
 
-    width, adaptive, distribution, seed = args
+    width, adaptive, distribution, social_weight, trending_weight, seed = args
 
     model = RecommendationBackfireModel(
         initial_preference_width=width,
         adaptive_tolerance=adaptive,
         initial_distribution=distribution,
+        social_signal_weight=social_weight,
+        trending_weight=trending_weight,
         seed=seed,
         **FIXED_PARAMS,
     )
@@ -80,8 +114,11 @@ def run_one(args):
         "initial_preference_width": width,
         "adaptive_tolerance": adaptive,
         "initial_distribution": distribution,
+        "social_signal_weight": social_weight,
+        "trending_weight": trending_weight,
+        "regime": regime_label(social_weight, trending_weight),
         "seed": seed,
-        # Initial-step values (so we can measure change, not just endpoint)
+        # Initial values
         "initial_mean_extremity": initial["Mean Extremity"],
         "initial_opinion_variance": initial["Opinion Variance"],
         "initial_extreme_share": initial["Extreme Share"],
@@ -98,6 +135,8 @@ def run_one(args):
         "final_ignore_rate": final["Ignore Rate"],
         "final_backfire_rate": final["Backfire Rate"],
         "final_avg_exposure_distance": final["Average Exposure Distance"],
+        "final_opinion_bimodality": final["Opinion Bimodality"],
+        "final_acceptance_history_filled": final["Mean Acceptance History Filled"],
     }
 
 
@@ -106,18 +145,18 @@ def run_one(args):
 # -----------------------------
 
 def build_arg_list():
-    """
-    Build the full list of (width, adaptive, distribution, seed) combinations.
-    """
-
     seeds = list(range(1, N_SEEDS + 1))
 
-    return list(itertools.product(
+    args = []
+    for width, adaptive, distribution, (sw, tw), seed in itertools.product(
         PREFERENCE_WIDTHS,
         ADAPTIVE_TOLERANCE_VALUES,
         INITIAL_DISTRIBUTIONS,
+        SOCIAL_TRENDING_REGIMES,
         seeds,
-    ))
+    ):
+        args.append((width, adaptive, distribution, sw, tw, seed))
+    return args
 
 
 def main():
@@ -126,17 +165,19 @@ def main():
 
     n_workers = max(1, cpu_count() - 1)
 
-    print("=" * 60)
+    print("=" * 70)
     print("Recommendation-Backfire ABM: Batch Experiment v2")
-    print("=" * 60)
+    print("  (with collaborative filtering + global trending channels)")
+    print("=" * 70)
     print(f"Preference widths:     {PREFERENCE_WIDTHS}")
     print(f"Adaptive tolerance:    {ADAPTIVE_TOLERANCE_VALUES}")
     print(f"Initial distributions: {INITIAL_DISTRIBUTIONS}")
+    print(f"(social, trending):    {SOCIAL_TRENDING_REGIMES}")
     print(f"Seeds per cell:        {N_SEEDS}")
     print(f"Total runs:            {n_runs}")
     print(f"Steps per run:         {N_STEPS}")
     print(f"Workers:               {n_workers}")
-    print("=" * 60)
+    print("=" * 70)
 
     start = time.time()
 
@@ -149,24 +190,25 @@ def main():
                 rate = i / elapsed
                 remaining = (n_runs - i) / rate if rate > 0 else 0
                 print(
-                    f"  Completed {i}/{n_runs} runs "
+                    f"  {i}/{n_runs} runs "
                     f"({elapsed:.1f}s elapsed, ~{remaining:.1f}s remaining)"
                 )
+
     df = pd.DataFrame(results)
 
     df = df.sort_values(
-        ["initial_distribution", "adaptive_tolerance", "initial_preference_width", "seed"]
+        ["initial_distribution", "adaptive_tolerance",
+         "initial_preference_width", "regime", "seed"]
     ).reset_index(drop=True)
 
     df.to_csv(OUTPUT_PATH, index=False)
 
     total_time = time.time() - start
-    print("=" * 60)
+    print("=" * 70)
     print(f"Done. {n_runs} runs in {total_time:.1f}s "
           f"({total_time / n_runs:.2f}s/run avg).")
     print(f"Results saved to: {OUTPUT_PATH}")
-    print("Next: run `python batch_analysis.py` to produce figures.")
-    print("=" * 60)
+    print("=" * 70)
 
 
 if __name__ == "__main__":
