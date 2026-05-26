@@ -1,16 +1,5 @@
-# batch_run_2.py
-
 """
-Batch experiment for the recommendation-backfire ABM (v2: collaborative + trending).
-
-This version adds two new sweep axes on top of v1:
-    - social_signal_weight: local collaborative-filtering strength
-    - trending_weight:      global ideology-agnostic viral channel strength
-
-These two channels are the agent-agent interdependence the v1 model lacked:
-behaviorally similar users now influence each other's recommendations, and a
-global pool of recently-accepted content circulates across the population.
-
+Batch experiment for the recommendation-backfire ABM 
 Sweep dimensions (full grid):
     - initial_preference_width        x 3  : {0.20, 0.50, 1.00}
     - adaptive_tolerance              x 2  : {True, False}
@@ -21,13 +10,6 @@ Sweep dimensions (full grid):
           (0.0, 0.5)  — pure global trending
           (0.4, 0.4)  — hybrid (realistic platform)
     - seed                            x 20
-
-Total: 3 x 2 x 3 x 4 x 20 = 1,440 runs.
-
-Run with:
-    python batch_run_2.py
-
-After it finishes, run batch_analysis_2.py to produce figures.
 """
 
 import time
@@ -49,7 +31,7 @@ INITIAL_DISTRIBUTIONS = ["polarized", "uniform", "moderate"]
 
 # Four collaborative-filtering regimes. Each pair is (social, trending).
 SOCIAL_TRENDING_REGIMES = [
-    (0.0, 0.0),    # v1 baseline (individual learning only)
+    (0.0, 0.0),    # baseline (individual learning only)
     (0.5, 0.0),    # pure local CF
     (0.0, 0.5),    # pure global trending
     (0.4, 0.4),    # hybrid (realistic platform)
@@ -88,7 +70,6 @@ def regime_label(s, t):
 def run_one(args):
     """
     Run one model instance and return a dict of summary metrics.
-    Designed to be called inside multiprocessing.Pool.
     """
 
     width, adaptive, distribution, social_weight, trending_weight, seed = args

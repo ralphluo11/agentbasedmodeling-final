@@ -1,27 +1,13 @@
 # cf_density_sweep.py
 
 """
-Experiment D: Fine-grained sweep over social_signal_weight.
+Fine-grained sweep over social_signal_weight.
 
 In the main batch we only tested social_signal_weight in {0.0, 0.5}. This
 experiment fills in the gap with five values from 0 to 0.8, holding
 trending_weight at 0, to test whether local collaborative filtering has any
 detectable effect at higher weights and to characterize the marginal effect
 of the CF channel cleanly.
-
-Sweep:
-    initial_preference_width : {0.20, 1.00}
-    social_signal_weight     : {0.0, 0.2, 0.4, 0.6, 0.8}
-    initial_distribution     : {polarized, uniform, moderate}
-    seed                     : 1..20
-
-trending_weight = 0 (pure CF channel test).
-adaptive_tolerance = False (isolated baseline test).
-
-Total: 2 * 5 * 3 * 20 = 600 runs * 100 steps.
-
-Run with:
-    python cf_density_sweep.py
 """
 
 import time

@@ -1,29 +1,9 @@
-# backfire_causal_v2.py
-
 """
-Experiment B: Backfire-causal experiment v2 (with collaborative + trending channels).
+Backfire-causal experiment 
 
 Tests whether the rejection-backfire channel is necessary for polarization
 under different recommendation regimes (individual baseline / local CF /
 global trending / hybrid).
-
-Sweep:
-    backfire_rate         : {0.00, 0.03, 0.06, 0.12}
-    initial_preference_width : {0.20, 0.50, 1.00}
-    regime (social, trending):
-        (0.0, 0.0)  individual_baseline
-        (0.5, 0.0)  local_cf
-        (0.0, 0.5)  global_trending
-        (0.4, 0.4)  hybrid
-    seed                  : 1..20
-
-Initial distribution fixed at uniform (cleanest test of emergent polarization).
-Adaptive tolerance fixed at False (so we isolate the backfire channel cleanly).
-
-Total: 4 * 3 * 4 * 20 = 960 runs * 100 steps.
-
-Run with:
-    python backfire_causal_v2.py
 """
 
 import time

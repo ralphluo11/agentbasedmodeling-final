@@ -1,27 +1,11 @@
 # trajectory_analysis_v3.py
 
 """
-Experiment C: Long-horizon trajectory analysis under different regimes.
+Long-horizon trajectory analysis under different regimes.
 
 Records per-step trajectories under both individual-baseline and global-
 trending regimes, to test whether the trending channel changes the SHAPE of
 the polarization trajectory (not only its endpoint).
-
-Sweep:
-    initial_preference_width : {0.20, 1.00}      (narrow vs wide)
-    regime (social, trending):
-        (0.0, 0.0)   individual_baseline
-        (0.0, 0.5)   global_trending
-    initial_distribution     : {polarized, uniform, moderate}
-    seed                     : 1..20
-
-Adaptive tolerance fixed at False (isolate baseline trajectory shape).
-Steps per run: 400.
-
-Total: 2 * 2 * 3 * 20 = 240 runs * 400 steps.
-
-Run with:
-    python trajectory_analysis_v3.py
 """
 
 import time
